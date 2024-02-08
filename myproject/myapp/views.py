@@ -6,6 +6,7 @@ from .models import *
 from .forms import PredictionForm
 import joblib
 import numpy as np
+import pandas as pd
 import openai
 from django.conf import settings
 
@@ -55,37 +56,46 @@ def Recommend(request):
             strand_text = strand_mapping.get(strand)
 
             # Prepare input data for prediction
-            input_data = [[float(cet), float(gpa), float(strand)]]
+            input_data = [[float(cet), float(gpa), float(strand), 0.0, 0.0]]
 
 
-            # Use your model to make predictions
             # List of model paths
             model_paths = [
-                {"path": r"C:\Users\acer\Desktop\thesis\myproject/model_aligned.pkl"},
-                {"path": r"C:\Users\acer\Desktop\thesis\myproject/model_not_aligned.pkl"},
-                {"path": r"C:\Users\acer\Desktop\thesis\myproject/model_mixed.pkl"},
-            ]
+            {"path": r"C:\Users\acer\Desktop\thesis\myproject\model_aligned.pkl"},
+            {"path": r"C:\Users\acer\Desktop\thesis\myproject\model_not_aligned.pkl"},
+            {"path": r"C:\Users\acer\Desktop\thesis\myproject\model_mixed.pkl"},
+        ]
 
+        all_probabilities = []
 
-            all_decision_function_scores = []
-
-            # Loop through each model
-            for model_info in model_paths:
-                # Use your model to make predictions
-                model = joblib.load(model_info["path"])
+        for model_info in model_paths:
+            # Correctly extract the path string from the dictionary
+            model_path = model_info["path"]
+            
+            # Load your model using the extracted path
+            model = joblib.load(model_path) 
+       
+            if hasattr(model, 'decision_function'):
+                # For models with decision_function
                 decision_function_scores = model.decision_function(input_data)
-                all_decision_function_scores.append(decision_function_scores)
+                probabilities = np.exp(decision_function_scores) / np.sum(np.exp(decision_function_scores), axis=1, keepdims=True)
+            else:
+                # For models that provide probabilities directly
+                probabilities = model.predict_proba(input_data)
+            
+            all_probabilities.append(probabilities)
+           # Convert decision_function_scores to probabilities if they're not already
+            # This step is necessary only if decision_function_scores come from a decision_function
+            probabilities = np.exp(decision_function_scores) / np.sum(np.exp(decision_function_scores), axis=1, keepdims=True)
 
+            # Get the indices of the top 3 predictions from highest to lowest
+            top_3_indices = np.argsort(probabilities[0])[-3:][::-1]
 
+            # Get class labels for the top 3 predictions
+            top_3_predicted_classes = model.classes_[top_3_indices]
 
-
-            # Calculate percentages
-            percentages = np.exp(decision_function_scores) / np.sum(np.exp(decision_function_scores), axis=1, keepdims=True)
-
-            # Get the top 3 predicted courses
-            top_3_courses_indices = decision_function_scores[0].argsort()[-3:][::-1]
-            top_3_predicted_classes = model.classes_[top_3_courses_indices]
-
+            # Extract the probabilities for the top 3 predicted classes
+            top_3_percentages = probabilities[0, top_3_indices]
 
             course_mapping = {
                 0: "COLLEGE OF ARCHITECTURE",
@@ -101,12 +111,9 @@ def Recommend(request):
                 10: "COLLEGE OF SCIENCE AND MATHEMATICS",
                 11: "COLLEGE OF SOCIAL WORK AND COMMUNITY DEVELOPMENT",
                 12: "COLLEGE OF SPORTS SCIENCE AND PHYSICAL EDUCATION",
-                13: "NONE",
 
             }
 
-            # Calculate percentages for the top 3 courses
-            top_3_percentages = percentages[0, top_3_courses_indices]
 
             # Determine the label for the course with the highest percentage
             highest_percentage_index = np.argmax(top_3_percentages)
@@ -116,31 +123,37 @@ def Recommend(request):
                 for i, percentage in enumerate(top_3_percentages)
             ]
 
+            # Displaying the cet, gpa, and strand on the first recommendation
             top_3_predicted_courses_with_description = [
                 (course_mapping[course], f"Your CET {cet}, GPA {gpa}, and SHS Strand is {strand_text}", label)
                 for course, label in zip(top_3_predicted_classes, labels)
             ]
 
+            # Convert numerical indices of the top 3 predicted courses to their corresponding collges names.
             top_3_predicted_classes = [course_mapping[course_num] for course_num in top_3_predicted_classes]
 
+            # Concatenate course names from top_3_predicted_classes into a single string separated by '|'.
             course_container = ""
             for course in top_3_predicted_classes:
                 course_container += course + '|'
 
+            # Split the concatenated string back into a list of courses.
             courses = course_container[:-1].strip().split('|')
+            
 
+            # Saving the PredResults to database
             pred_result = PredResults(
                 first_name=first_name,
                 last_name=last_name,
                 sex=sex,
                 cet=cet,
                 gpa=gpa,
+                # cet_status=cet_status,
+                # gpa_status=gpa_status,
                 strand=strand_text,
                 recommended_course=courses,
             )
             pred_result.save()
-
-
 
 
             # Use OpenAI GPT-3 to generate analysis
@@ -169,17 +182,18 @@ def Recommend(request):
                 analyses.append(response['choices'][0]['text'])
                 print(prompt_for_course)
 
+            # Retrieve the index of the course in predicted classes and get its corresponding percentage
             course_index = top_3_predicted_classes.index(course)
-            course_description = top_3_predicted_courses_with_description[course_index][1]
             percentage = top_3_predicted_courses_with_description[course_index][2]
 
+            # Saving the Recommended colloges to the database
             for (course, description, percentage), analysis in zip(top_3_predicted_courses_with_description, analyses):
                 recommended_course = RecommendedCourse(
                     prediction_id=pred_result,
                     course=course,
                     percentage=percentage,
                     description=description,
-                    analysis=analysis,  # Save the analysis in the analysis field
+                    analysis=analysis,  
                 )
                 recommended_course.save()
 
