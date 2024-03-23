@@ -79,8 +79,14 @@ h1, h2, h3, h4, h5, h6 {
 
 .flexslider {
   position: relative;
-  top: -96px;
+  top: -250px;
+  margin-bottom: -270px;
 }
+
+.flexslider img{
+  background-size: cover;
+}
+
 .flexslider .overlay {
   position: absolute;
   top: 0;
@@ -95,7 +101,7 @@ h1, h2, h3, h4, h5, h6 {
   z-index: 9;
   width: 100%;
   text-align: center;
-  top: 380px;
+  margin-top: 100px;
   left: 0;
 }
 .flexslider .slider-caption h2 {
@@ -387,6 +393,7 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 30px;
 }
 .team-member .member-thumb {
+  margin: 30px;
   position: relative;
   overflow: hidden;
   border-radius: 50%;
@@ -395,6 +402,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 .team-member .member-thumb img {
   width: 100%;
+  padding: 2px;
+  background-color: #01c282;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+  -moz-border-radius: 50%;
 }
 .team-member .member-thumb .team-overlay {
   position: absolute;
@@ -406,7 +418,7 @@ h1, h2, h3, h4, h5, h6 {
   text-align: center;
   top: 0;
   left: 0;
-  background-color: #01c282;
+  background-color: #01c28293;
   color: white;
   opacity: 0;
   visibility: hidden;
